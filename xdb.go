@@ -17,6 +17,14 @@ type XDBConfig struct {
 	// Name 是后端名，默认 "xdb"。
 	Name string
 
+	// Policy 对应 ipgeo.WithCachePolicy（CacheNone / CacheVectorIndex / CacheFull）。
+	//
+	// 注意：ipgeo 当前分支已统一为「mmap 整文件 + 二分查找」，
+	// WithCachePolicy / WithV4CachePolicy / WithV6CachePolicy / WithSearchers 都是
+	// 兼容用的空实现，三种策略行为完全一致。这里只做原样透传，等上游恢复行为后
+	// 自然生效；想要结果缓存请用 LRU。
+	Policy ipgeo.CachePolicy
+
 	// LRU 是结果缓存条数，0 表示关闭。
 	LRU int
 
@@ -35,7 +43,8 @@ func OpenXDB(cfg XDBConfig) (Backend, error) {
 		return nil, errors.New("ipfactory: XDBConfig needs V4Path or V6Path")
 	}
 
-	opts := make([]ipgeo.Option, 0, 2)
+	opts := make([]ipgeo.Option, 0, 3)
+	opts = append(opts, ipgeo.WithCachePolicy(cfg.Policy))
 	if cfg.LRU > 0 {
 		opts = append(opts, ipgeo.WithLRU(cfg.LRU))
 	}

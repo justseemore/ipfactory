@@ -101,7 +101,7 @@ ipfactory.Config{Kind: "xdb"}  // 直接按 ip2region xdb 打开
 | `Backend.Name()` / `Backend.Close()` | 后端名 / 释放资源（重复调用安全） |
 | `Config` | `Kind` + `AWDB` + `XDB` |
 | `AWDBConfig` | `Path` / `Name` / `Aliases` |
-| `XDBConfig` | `V4Path` / `V6Path` / `Name` / `LRU` / `Layout` |
+| `XDBConfig` | `V4Path` / `V6Path` / `Name` / `Policy` / `LRU` / `Layout` |
 
 ## 结果映射
 
@@ -139,6 +139,15 @@ AWDBConfig{
 2. **xdb 要区分 v4/v6**：只给 `V4Path` 时，v6 查询会返回 `ErrNotFound`，链会继续往后走。
 3. **awdb 的 `4_6` 库**：v4 查询走 96 位偏移，由 `awdb` 内部处理，这里无需关心。
 4. **不要为“换库”引一层定时器**：需要自动重载时，用 `ipgeo.Provider`（已有 SIGHUP / 定时刷新），或在自己的服务层重开 `Backend` 后原子替换。
+
+## 测试
+
+```bash
+go vet ./... && go test -race ./...
+```
+
+测试不依赖真实库文件：`fakeBackend` 覆盖链式回落、硬错误、关闭、ctx 取消；`TestMapColumn` / `TestResultGet` 覆盖映射；`TestDetectKind` 用合成的 awdb 文件头验证探测。
+ull` 三者行为完全一致。所以 `XDBConfig.Policy` 只是原样透传（上游恢复后自动生效）；真正有用的缓存是 `XDBConfig.LRU`：按 IP 的结果缓存，256 分片、FIFO 淘汰（命中不提升）。
 
 ## 测试
 
