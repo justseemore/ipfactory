@@ -96,7 +96,8 @@ ipfactory.Config{Kind: "xdb"}  // 直接按 ip2region xdb 打开
 | `OpenChain(...Config) (Backend, error)` | 打开并串成主备链（单个配置时直接返回后端） |
 | `NewChain(name, ...Backend) *Chain` | 用现成后端拼链 |
 | `DetectKind(path) (string, error)` | 只看头部判断格式 |
-| `Backend.LookupAddr(ctx, netip.Addr)` | 统一查询入口 |
+| `Backend.Lookup(ip string)` | 字符串入口，内部用 `context.Background()` |
+| `Backend.LookupAddr(ctx, netip.Addr)` | 带 context 的查询入口 |
 | `Backend.Name()` / `Backend.Close()` | 后端名 / 释放资源（重复调用安全） |
 | `Config` | `Kind` + `AWDB` + `XDB` |
 | `AWDBConfig` | `Path` / `Name` / `Aliases` |

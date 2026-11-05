@@ -23,7 +23,7 @@
 //	}
 //	defer backend.Close()
 //
-//	res, err := backend.LookupAddr(ctx, netip.MustParseAddr("8.8.8.8"))
+//	res, err := backend.Lookup("8.8.8.8")
 //	if errors.Is(err, ipfactory.ErrNotFound) {
 //		// 所有后端都未收录
 //	}
@@ -136,6 +136,9 @@ type Backend interface {
 	// Name 是后端标识，会写进 Result.Backend，便于排查是哪个库命中的。
 	Name() string
 
+	// Lookup 是字符串入口，等价于 LookupAddr(context.Background(), addr)。
+	Lookup(ip string) (*Result, error)
+
 	// LookupAddr 查询一个地址。未收录返回包装了 ErrNotFound 的错误。
 	LookupAddr(ctx context.Context, addr netip.Addr) (*Result, error)
 
@@ -246,4 +249,13 @@ func stringify(v any) string {
 		return strconv.FormatBool(typed)
 	}
 	return fmt.Sprint(v)
+}
+
+// parseIP 解析字符串 IP，失败时返回包装了 ErrInvalidIP 的错误。
+func parseIP(ip string) (netip.Addr, error) {
+	addr, err := netip.ParseAddr(strings.TrimSpace(ip))
+	if err != nil {
+		return netip.Addr{}, fmt.Errorf("%w: %q", ErrInvalidIP, ip)
+	}
+	return addr, nil
 }

@@ -63,6 +63,15 @@ func (b *xdbBackend) Close() error {
 	return nil
 }
 
+// Lookup 是字符串入口。
+func (b *xdbBackend) Lookup(ip string) (*Result, error) {
+	addr, err := parseIP(ip)
+	if err != nil {
+		return nil, err
+	}
+	return b.LookupAddr(context.Background(), addr)
+}
+
 func (b *xdbBackend) LookupAddr(ctx context.Context, addr netip.Addr) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

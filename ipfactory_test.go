@@ -42,6 +42,14 @@ func (f *fakeBackend) LookupAddr(ctx context.Context, addr netip.Addr) (*Result,
 	return &out, nil
 }
 
+func (f *fakeBackend) Lookup(ip string) (*Result, error) {
+	addr, err := parseIP(ip)
+	if err != nil {
+		return nil, err
+	}
+	return f.LookupAddr(context.Background(), addr)
+}
+
 func (f *fakeBackend) Close() error {
 	f.closed.Add(1)
 	return nil
@@ -229,5 +237,27 @@ func TestDetectKind(t *testing.T) {
 
 	if _, err := DetectKind(filepath.Join(dir, "missing.bin")); err == nil {
 		t.Error("missing file accepted")
+	}
+}
+
+func TestChainLookup(t *testing.T) {
+	chain := NewChain("", &fakeBackend{name: "a"}, &fakeBackend{name: "b", res: &Result{City: "北京"}})
+	defer chain.Close()
+
+	res, err := chain.Lookup("1.2.3.4")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if res.City != "北京" {
+		t.Errorf("City = %q", res.City)
+	}
+
+	// 前后空格应当被忽略
+	if _, err := chain.Lookup("  1.2.3.4  "); err != nil {
+		t.Errorf("Lookup(带空格) error = %v", err)
+	}
+
+	if _, err := chain.Lookup("not-an-ip"); !errors.Is(err, ErrInvalidIP) {
+		t.Errorf("Lookup(invalid) error = %v, want ErrInvalidIP", err)
 	}
 }

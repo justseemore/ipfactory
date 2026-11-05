@@ -48,6 +48,15 @@ func (b *awdbBackend) Name() string { return b.name }
 
 func (b *awdbBackend) Close() error { return b.reader.Close() }
 
+// Lookup 是字符串入口。
+func (b *awdbBackend) Lookup(ip string) (*Result, error) {
+	addr, err := parseIP(ip)
+	if err != nil {
+		return nil, err
+	}
+	return b.LookupAddr(context.Background(), addr)
+}
+
 func (b *awdbBackend) LookupAddr(ctx context.Context, addr netip.Addr) (*Result, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err

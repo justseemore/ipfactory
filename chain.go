@@ -41,6 +41,15 @@ func (c *Chain) Backends() []Backend {
 	return out
 }
 
+// Lookup 是字符串入口，正常命中时走和 LookupAddr 相同的回落逻辑。
+func (c *Chain) Lookup(ip string) (*Result, error) {
+	addr, err := parseIP(ip)
+	if err != nil {
+		return nil, err
+	}
+	return c.LookupAddr(context.Background(), addr)
+}
+
 // LookupAddr 依次查询；全部未命中时返回 ErrNotFound，出现硬错误时返回第一个硬错误。
 func (c *Chain) LookupAddr(ctx context.Context, addr netip.Addr) (*Result, error) {
 	if len(c.backends) == 0 {
