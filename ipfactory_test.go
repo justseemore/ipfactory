@@ -295,9 +295,9 @@ func TestGeoCNDivisionSplit(t *testing.T) {
 		code                     uint32
 		province, city, district string
 	}{
-		{110108, "北京市", "", "海淀区"},
-		{110100, "北京市", "", ""},
-		{310115, "上海市", "", "浦东新区"},
+		{110108, "北京市", "北京市", "海淀区"},
+		{110100, "北京市", "北京市", ""},
+		{310115, "上海市", "上海市", "浦东新区"},
 		{440305, "广东省", "深圳市", "南山区"},
 		{440300, "广东省", "深圳市", ""},
 		{440000, "广东省", "", ""},
@@ -399,5 +399,44 @@ func TestNormalizeBackend(t *testing.T) {
 	}
 	if res.Backend != "raw" || backend.Name() != "raw" {
 		t.Errorf("Backend/Name 被破坏: %q %q", res.Backend, backend.Name())
+	}
+}
+
+func TestChainMergeMissing(t *testing.T) {
+	// 主后端只到区，缺 City；备后端有 City 和 ISP
+	primary := func() Backend {
+		return &fakeBackend{name: "geocn", res: &Result{
+			Country: "中国", Province: "北京市", District: "海淀区",
+		}}
+	}
+	backup := func() Backend {
+		return &fakeBackend{name: "xdb", res: &Result{
+			Country: "中国", Province: "北京市", City: "北京市", ISP: "电信",
+		}}
+	}
+
+	merged, err := NewChain("", primary(), backup()).SetMergeMissing(true).Lookup("1.2.3.4")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if merged.City != "北京市" {
+		t.Errorf("City = %q, 应从后续后端补齐", merged.City)
+	}
+	if merged.District != "海淀区" {
+		t.Errorf("District = %q, 不应被覆盖", merged.District)
+	}
+	if merged.ISP != "电信" {
+		t.Errorf("ISP = %q", merged.ISP)
+	}
+	if merged.Backend != "geocn" {
+		t.Errorf("Backend = %q, 应保留基准后端", merged.Backend)
+	}
+
+	plain, err := NewChain("", primary(), backup()).Lookup("1.2.3.4")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if plain.City != "" {
+		t.Errorf("未开 MergeMissing 却补齐了: City = %q", plain.City)
 	}
 }

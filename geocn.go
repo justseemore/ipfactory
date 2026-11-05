@@ -150,15 +150,15 @@ func (b *geocnBackend) splitDivision(code uint32) (province, city, district stri
 	province = b.div[provinceCode]
 	if cityCode != provinceCode {
 		city = b.div[cityCode]
+		// 直辖市的市级码一般写作「市辖区 / 县」，或与省同名；这类占位名
+		// 统一用省名兜底，保证 City 与 xdb / awdb 的「北京市」写法对齐。
+		switch city {
+		case "", "市辖区", "县":
+			city = province
+		}
 	}
 	if code != cityCode && code != provinceCode {
 		district = b.div[code]
-	}
-
-	// 直辖市的市级码通常写作「市辖区 / 县」，与省级重名时更没有意义，直接留空。
-	switch city {
-	case "市辖区", "县", province:
-		city = ""
 	}
 	return province, city, district
 }

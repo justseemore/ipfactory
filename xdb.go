@@ -128,3 +128,19 @@ func (b *xdbBackend) LookupAddr(ctx context.Context, addr netip.Addr) (*Result, 
 }
 
 var _ Backend = (*xdbBackend)(nil)
+
+// LayoutIP2Region 对应 ip2region 官方 region 串的段序：
+//
+//	国家|区域|省份|城市|ISP     例如：中国|0|广东省|深圳市|电信
+//
+// 第二段“区域”通常是 0；这里用一个未定义的 Field 值跳过它，否则 ipgeo 会把
+// 省份当成 City、城市当成 ISP。用它覆盖默认布局：
+//
+//	XDBConfig{Layout: ipfactory.LayoutIP2Region}
+var LayoutIP2Region = ipgeo.Layout{
+	ipgeo.FieldCountry,
+	ipgeo.Field(0xFF), // 跳过“区域”
+	ipgeo.FieldProvince,
+	ipgeo.FieldCity,
+	ipgeo.FieldISP,
+}

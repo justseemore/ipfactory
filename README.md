@@ -123,7 +123,8 @@ backend, err := ipfactory.OpenChain(
 | `Backend.LookupAddr(ctx, netip.Addr)` | 带 context 的查询入口 |
 | `Backend.Name()` / `Backend.Close()` | 后端名 / 释放资源（重复调用安全） |
 | `Normalize(*Result)` | 手动归一化字段值（默认已自动应用） |
-| `Config` | `Kind` + `AWDB` + `XDB` + `GeoCN` + `Raw` |
+| `Config` | `Kind` + `AWDB` + `XDB` + `GeoCN` + `MergeMissing` + `Raw` |
+| `LayoutIP2Region` | ip2region 官方段序（国家\|区域\|省份\|城市\|ISP）的 Layout 预设 |
 | `AWDBConfig` | `Path` / `Name` / `Preload` / `Aliases` |
 | `XDBConfig` | `V4Path` / `V6Path` / `Name` / `Policy` / `LRU` / `Preload` / `Layout` |
 | `GeoCNConfig` | `Path` / `Name` / `Divisions` / `Preload` |
@@ -197,6 +198,15 @@ go vet ./... && go test -race ./...
 测试不依赖真实库文件：`fakeBackend` 覆盖链式回落、硬错误、关闭、ctx 取消；`TestMapColumn` / `TestResultGet` 覆盖映射；`TestDetectKind` 用合成的 awdb 文件头验证探测。
 ull` 三者行为完全一致。所以 `XDBConfig.Policy` 只是原样透传（上游恢复后自动生效）；真正有用的缓存是 `XDBConfig.LRU`：按 IP 的结果缓存，256 分片、FIFO 淘汰（命中不提升）。
 6. **`Preload` 三个后端都支持**：`XDBConfig.Preload` → `ipgeo.WithPreload`（xdb 整文件读进堆，v4/v6 各自计算），`AWDBConfig.Preload` → `awdb.WithPreload`（`os.ReadFile` + `OpenBytes`），`GeoCNConfig.Preload` → `maxminddb.FromBytes`。三者都让 RSS ≈ 文件大小并消除运行期缺页，默认都关闭（mmap）。本地联调借助仓库根的 `go.work` 指向本地 `awdb` / `ipgeo`；推到远端前要先发这两条改动，否则 `@latest` 拉不到 `WithPreload`。
+
+## 测试
+
+```bash
+go vet ./... && go test -race ./...
+```
+
+测试不依赖真实库文件：`fakeBackend` 覆盖链式回落、硬错误、关闭、ctx 取消；`TestMapColumn` / `TestResultGet` 覆盖映射；`TestDetectKind` 用合成的 awdb 文件头验证探测。
+eo.WithPreload`（xdb 整文件读进堆，v4/v6 各自计算），`AWDBConfig.Preload` → `awdb.WithPreload`（`os.ReadFile` + `OpenBytes`），`GeoCNConfig.Preload` → `maxminddb.FromBytes`。三者都让 RSS ≈ 文件大小并消除运行期缺页，默认都关闭（mmap）。本地联调借助仓库根的 `go.work` 指向本地 `awdb` / `ipgeo`；推到远端前要先发这两条改动，否则 `@latest` 拉不到 `WithPreload`。
 
 ## 测试
 

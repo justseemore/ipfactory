@@ -32,6 +32,10 @@ type Config struct {
 	// GeoCN 在 Kind 为 geocn 或 auto 时使用。
 	GeoCN GeoCNConfig
 
+	// MergeMissing 只在链模式生效：首个命中的后端若国家/省/市为空，
+	// 继续用后续后端补上空字段（不覆盖已有值）。
+	MergeMissing bool
+
 	// Raw 为 true 时不做字段值归一化，保留各库的原始写法。
 	// 默认 false，即用 Normalize 统一占位符、国家名与 ISO 码。
 	Raw bool
@@ -121,5 +125,12 @@ func OpenChain(cfgs ...Config) (Backend, error) {
 		}
 		backends = append(backends, b)
 	}
-	return NewChain("", backends...), nil
+	merge := false
+	for _, cfg := range cfgs {
+		if cfg.MergeMissing {
+			merge = true
+			break
+		}
+	}
+	return NewChain("", backends...).SetMergeMissing(merge), nil
 }
