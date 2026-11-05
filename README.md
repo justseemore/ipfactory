@@ -148,6 +148,7 @@ go vet ./... && go test -race ./...
 
 测试不依赖真实库文件：`fakeBackend` 覆盖链式回落、硬错误、关闭、ctx 取消；`TestMapColumn` / `TestResultGet` 覆盖映射；`TestDetectKind` 用合成的 awdb 文件头验证探测。
 ull` 三者行为完全一致。所以 `XDBConfig.Policy` 只是原样透传（上游恢复后自动生效）；真正有用的缓存是 `XDBConfig.LRU`：按 IP 的结果缓存，256 分片、FIFO 淘汰（命中不提升）。
+6. **`Preload` 是 `ipgeo.WithPreload` 的透传**：打开时把 xdb 整文件读进堆（RSS ≈ 文件大小，v4/v6 各自计算），省掉运行期缺页，默认关闭（mmap + `MADV_RANDOM`）。本地联调借助仓库根的 `go.work` 指向本地 `ipgeo`；推到远端前要先发 `ipgeo` 那条改动，否则 `@latest` 拉不到 `WithPreload`。
 
 ## 测试
 

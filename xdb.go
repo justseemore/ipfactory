@@ -28,6 +28,10 @@ type XDBConfig struct {
 	// LRU 是结果缓存条数，0 表示关闭。
 	LRU int
 
+	// Preload 为 true 时让 ipgeo 把 xdb 整个读进堆内存（RSS ≈ 文件大小），
+	// 而不是 mmap 按需缺页。适合库文件固定、实例内存可控的部署。
+	Preload bool
+
 	// Layout 显式指定 region 串的字段布局；nil 表示由 ipgeo 自动推断。
 	Layout ipgeo.Layout
 }
@@ -43,10 +47,13 @@ func OpenXDB(cfg XDBConfig) (Backend, error) {
 		return nil, errors.New("ipfactory: XDBConfig needs V4Path or V6Path")
 	}
 
-	opts := make([]ipgeo.Option, 0, 3)
+	opts := make([]ipgeo.Option, 0, 4)
 	opts = append(opts, ipgeo.WithCachePolicy(cfg.Policy))
 	if cfg.LRU > 0 {
 		opts = append(opts, ipgeo.WithLRU(cfg.LRU))
+	}
+	if cfg.Preload {
+		opts = append(opts, ipgeo.WithPreload(true))
 	}
 	if cfg.Layout != nil {
 		opts = append(opts, ipgeo.WithLayout(cfg.Layout))
