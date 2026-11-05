@@ -60,11 +60,12 @@ type Result struct {
 	IP          string         `json:"ip"`
 	Version     int            `json:"version"`
 	Continent   string         `json:"continent,omitempty"`
-	Country     string         `json:"country,omitempty"`
-	Province    string         `json:"province,omitempty"`
-	City        string         `json:"city,omitempty"`
-	District    string         `json:"district,omitempty"`
-	ISP         string         `json:"isp,omitempty"`
+	// 以下 5 个是契约字段：始终出现在 JSON 里，缺失时由 EnsureFields 填占位符。
+	Country     string         `json:"country"`
+	Province    string         `json:"province"`
+	City        string         `json:"city"`
+	District    string         `json:"district"`
+	ISP         string         `json:"isp"`
 	NetworkType string         `json:"network_type,omitempty"`
 	ISOCode     string         `json:"iso_code,omitempty"`
 	IsPrivate   bool           `json:"is_private,omitempty"`

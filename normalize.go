@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+// DefaultMissingPlaceholder 是 5 个契约字段缺失时的默认占位符，
+// 可通过 Config.MissingPlaceholder 改写。
+const DefaultMissingPlaceholder = "未知"
+
 // 常见的“空值占位符”。不同库习惯不同：ip2region 写 "0"，有的写 "-"，
 // 统一成空串后调用方无需再判。
 var emptyPlaceholders = map[string]struct{}{
@@ -53,6 +57,31 @@ func Normalize(res *Result) {
 	}
 }
 
+// EnsureFields 把 5 个契约字段（country / province / city / district / isp）
+// 补齐成占位符，保证不论哪个后端、哪条数据，返回结构都完整。
+//
+// placeholder 为空时不做任何事（相当于保留空串）。
+func EnsureFields(res *Result, placeholder string) {
+	if res == nil || placeholder == "" {
+		return
+	}
+	if res.Country == "" {
+		res.Country = placeholder
+	}
+	if res.Province == "" {
+		res.Province = placeholder
+	}
+	if res.City == "" {
+		res.City = placeholder
+	}
+	if res.District == "" {
+		res.District = placeholder
+	}
+	if res.ISP == "" {
+		res.ISP = placeholder
+	}
+}
+
 func normalizeText(s string) string {
 	s = strings.ReplaceAll(s, "\u3000", " ")
 	s = strings.TrimSpace(s)
@@ -65,7 +94,9 @@ func normalizeText(s string) string {
 	return s
 }
 
-// normalizeBackend 在查询返回前做一次归一化，由 OpenBackend 默认包上。
+// normalizeBackend 只做值归一化，不做占位补齐。
+//
+// 链式查询里每个后端都是这一层，这样 Chain 才能看到“真正的空值”去做补齐。
 type normalizeBackend struct {
 	Backend
 }
@@ -88,4 +119,31 @@ func (n normalizeBackend) LookupAddr(ctx context.Context, addr netip.Addr) (*Res
 	return res, nil
 }
 
-var _ Backend = normalizeBackend{}
+// ensureBackend 只做占位补齐，永远在归一化之后（单后端或整条链之后）。
+type ensureBackend struct {
+	Backend
+	placeholder string
+}
+
+func (e ensureBackend) Lookup(ip string) (*Result, error) {
+	res, err := e.Backend.Lookup(ip)
+	if err != nil {
+		return nil, err
+	}
+	EnsureFields(res, e.placeholder)
+	return res, nil
+}
+
+func (e ensureBackend) LookupAddr(ctx context.Context, addr netip.Addr) (*Result, error) {
+	res, err := e.Backend.LookupAddr(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	EnsureFields(res, e.placeholder)
+	return res, nil
+}
+
+var (
+	_ Backend = normalizeBackend{}
+	_ Backend = ensureBackend{}
+)

@@ -386,6 +386,26 @@ func TestNormalize(t *testing.T) {
 	Normalize(nil)
 }
 
+func TestEnsureFields(t *testing.T) {
+	res := &Result{Country: "中国", Province: ""}
+	EnsureFields(res, DefaultMissingPlaceholder)
+	if res.Province != "未知" || res.City != "未知" || res.District != "未知" || res.ISP != "未知" {
+		t.Errorf("补齐失败: %+v", res)
+	}
+	if res.Country != "中国" {
+		t.Errorf("已有值被覆盖: %q", res.Country)
+	}
+
+	// 占位符为空时不动
+	other := &Result{Country: "中国"}
+	EnsureFields(other, "")
+	if other.City != "" {
+		t.Errorf("placeholder 为空却补齐了: %q", other.City)
+	}
+
+	EnsureFields(nil, DefaultMissingPlaceholder)
+}
+
 func TestNormalizeBackend(t *testing.T) {
 	raw := &fakeBackend{name: "raw", res: &Result{Country: "CN", Province: "北京市", City: "0"}}
 	var backend Backend = normalizeBackend{Backend: raw}

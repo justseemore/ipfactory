@@ -32,9 +32,13 @@ type Config struct {
 	// GeoCN 在 Kind 为 geocn 或 auto 时使用。
 	GeoCN GeoCNConfig
 
-	// MergeMissing 只在链模式生效：首个命中的后端若国家/省/市为空，
-	// 继续用后续后端补上空字段（不覆盖已有值）。
-	MergeMissing bool
+	// DisableMergeMissing 关闭链式字段补齐。默认开启：首个命中的后端若
+	// 国家/省/市/区县/ISP 有空缺，继续用后续后端补上（不覆盖已有值）。
+	DisableMergeMissing bool
+
+	// MissingPlaceholder 是 5 个契约字段缺失时的占位符，默认 "未知"。
+	// 完全不填充请用 Raw。
+	MissingPlaceholder string
 
 	// Raw 为 true 时不做字段值归一化，保留各库的原始写法。
 	// 默认 false，即用 Normalize 统一占位符、国家名与 ISO 码。
@@ -99,7 +103,15 @@ func OpenBackend(cfg Config) (Backend, error) {
 	if cfg.Raw {
 		return backend, nil
 	}
-	return normalizeBackend{Backend: backend}, nil
+
+	placeholder := cfg.MissingPlaceholder
+	if placeholder == "" {
+		placeholder = DefaultMissingPlaceholder
+	}
+	return ensureBackend{
+		Backend:     normalizeBackend{Backend: backend},
+		placeholder: placeholder,
+	}, nil
 }
 
 // OpenChain 按顺序打开多个配置并串成主备链。
@@ -123,14 +135,30 @@ func OpenChain(cfgs ...Config) (Backend, error) {
 			}
 			return nil, fmt.Errorf("ipfactory: open backend #%d: %w", i, err)
 		}
+		// 剥掉最外层的补齐包装：链内部要看到真实空值才能合并，
+		// 补齐统一在整条链返回后做一次。
+		if ensured, ok := b.(ensureBackend); ok {
+			b = ensured.Backend
+		}
 		backends = append(backends, b)
 	}
-	merge := false
+
+	merge := true
 	for _, cfg := range cfgs {
-		if cfg.MergeMissing {
-			merge = true
+		if cfg.DisableMergeMissing {
+			merge = false
 			break
 		}
 	}
-	return NewChain("", backends...).SetMergeMissing(merge), nil
+
+	chain := NewChain("", backends...).SetMergeMissing(merge)
+	if cfgs[0].Raw {
+		return chain, nil
+	}
+
+	placeholder := cfgs[0].MissingPlaceholder
+	if placeholder == "" {
+		placeholder = DefaultMissingPlaceholder
+	}
+	return ensureBackend{Backend: chain, placeholder: placeholder}, nil
 }

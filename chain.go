@@ -9,8 +9,8 @@ import (
 
 // Chain 顺序查询多个后端，第一个命中的结果直接返回。
 //
-// 可选开启“字段补齐”（MergeMissing）：首个命中的后端若国家/省/市有空缺，
-// 会继续查后续后端把空字段填上，但不覆盖已有值。适合“GeoCN 只给到区、
+// 可选开启“字段补齐”（默认开启，可用 SetMergeMissing(false) 关掉）：首个命中的
+// 后端若国家/省/市/区县/ISP 有空缺，会继续查后续后端把空字段填上，但不覆盖已有值。适合“GeoCN 只给到区、
 // ip2region 只有省市”这类互补场景。
 type Chain struct {
 	name     string
@@ -138,10 +138,11 @@ func (c *Chain) Close() error {
 	return errors.Join(errs...)
 }
 
-// missingCore 判断基础地理位置字段是否还缺。ISP 不计入：不少库对住宅宽带
-// 本来就不给 ISP，强求会导致每条结果都去补齐。
+// missingCore 判断 5 个契约字段是否还缺。ISP 也计入：调用方要求任何后端都能
+// 拿到这 5 个字段，代价是可能为一条记录多查一次后续后端。
 func missingCore(res *Result) bool {
-	return res.Country == "" || res.Province == "" || res.City == ""
+	return res.Country == "" || res.Province == "" ||
+		res.City == "" || res.District == "" || res.ISP == ""
 }
 
 // fillMissing 只用 src 的非空值填 dst 的空字段，不覆盖已有值。

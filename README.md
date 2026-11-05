@@ -111,6 +111,32 @@ backend, err := ipfactory.OpenChain(
 `GeoCN.mmdb` 从 [Releases](https://github.com/ljxi/GeoCN/releases/latest/download/GeoCN.mmdb) 下载；
 `data/full.txt`（全名）或 `data/short.txt`（简称）从仓库拿，两种分隔符都认。
 
+### 5. 五个契约字段（默认保证有值）
+
+`country` / `province` / `city` / `district` / `isp` 是契约字段：不论用哪个后端，
+返回结果里这 5 个 key **一定存在**（JSON tag 已去掉 `omitempty`），且默认填成非空：
+
+1. **链式补齐（默认开启）**：首个命中的后端作为基准，缺的字段依次问后续后端，只补空、不覆盖。
+2. **占位符**：所有后端都补不上时填 `未知`（可用 `MissingPlaceholder` 改）。
+
+```go
+ipfactory.Config{Kind: "geocn", GeoCN: ...} // 基准：国家 / 省 / 区
+ipfactory.Config{XDB: ...}                  // 补 city / isp
+```
+
+不想补齐：`DisableMergeMissing: true`（只保留首个命中的值，仍会填占位符）；
+连归一化和占位都不要：`Raw: true`。
+
+ip2region 官方 region 串是 `国家|区域|省份|城市|ISP`（第二段通常是 `0`）。
+如果发现省/市错位（例如 City 显示成“广东省”），显式指定布局：
+
+```go
+ipfactory.Config{XDB: ipfactory.XDBConfig{
+	V4Path: "data/ip2region_v4.xdb",
+	Layout: ipfactory.LayoutIP2Region,
+}}
+```
+
 ## API
 
 | 符号 | 说明 |
@@ -123,7 +149,7 @@ backend, err := ipfactory.OpenChain(
 | `Backend.LookupAddr(ctx, netip.Addr)` | 带 context 的查询入口 |
 | `Backend.Name()` / `Backend.Close()` | 后端名 / 释放资源（重复调用安全） |
 | `Normalize(*Result)` | 手动归一化字段值（默认已自动应用） |
-| `Config` | `Kind` + `AWDB` + `XDB` + `GeoCN` + `MergeMissing` + `Raw` |
+| `Config` | `Kind` + `AWDB` + `XDB` + `GeoCN` + `DisableMergeMissing` + `MissingPlaceholder` + `Raw` |
 | `LayoutIP2Region` | ip2region 官方段序（国家\|区域\|省份\|城市\|ISP）的 Layout 预设 |
 | `AWDBConfig` | `Path` / `Name` / `Preload` / `Aliases` |
 | `XDBConfig` | `V4Path` / `V6Path` / `Name` / `Policy` / `LRU` / `Preload` / `Layout` |
@@ -215,3 +241,4 @@ go vet ./... && go test -race ./...
 ```
 
 测试不依赖真实库文件：`fakeBackend` 覆盖链式回落、硬错误、关闭、ctx 取消；`TestMapColumn` / `TestResultGet` 覆盖映射；`TestDetectKind` 用合成的 awdb 文件头验证探测。
+��成的 awdb 文件头验证探测。
