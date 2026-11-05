@@ -310,10 +310,10 @@ func TestGeoCNDivisionSplit(t *testing.T) {
 		}
 	}
 
-	// 没有行政区划表时只留空，不能 panic
+	// 没有外部表时用内置省级表兜底：省市有值，区县仍空
 	empty := &geocnBackend{}
-	if p, c, d := empty.splitDivision(110108); p != "" || c != "" || d != "" {
-		t.Errorf("empty table: %q/%q/%q", p, c, d)
+	if p, c, d := empty.splitDivision(110105); p != "北京市" || c != "北京市" || d != "" {
+		t.Errorf("builtin fallback: %q/%q/%q", p, c, d)
 	}
 }
 

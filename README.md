@@ -108,8 +108,16 @@ backend, err := ipfactory.OpenChain(
 )
 ```
 
-`GeoCN.mmdb` 从 [Releases](https://github.com/ljxi/GeoCN/releases/latest/download/GeoCN.mmdb) 下载；
-`data/full.txt`（全名）或 `data/short.txt`（简称）从仓库拿，两种分隔符都认。
+`GeoCN.mmdb` 从 [Releases](https://github.com/ljxi/GeoCN/releases/latest/download/GeoCN.mmdb) 下载。
+
+省市区名称来自行政区划表，解析优先级：
+
+1. `GeoCNConfig.Divisions` 显式指定的文件；
+2. mmdb 同目录下的 `full.txt` / `short.txt`（含 `data/` 子目录），自动探测；
+3. 内置的 34 个省级码表——只能保证 `province`（及直辖市的 `city`）有值。
+
+区县名称必须靠第 1/2 步的表（GeoCN 仓库的 `data/full.txt`，约 65 KB）。
+记录里的 `isp`、`country` 等字段会按列名映射直接进 `Result`，不需要额外配置。
 
 ### 5. 五个契约字段（默认保证有值）
 
@@ -241,4 +249,4 @@ go vet ./... && go test -race ./...
 ```
 
 测试不依赖真实库文件：`fakeBackend` 覆盖链式回落、硬错误、关闭、ctx 取消；`TestMapColumn` / `TestResultGet` 覆盖映射；`TestDetectKind` 用合成的 awdb 文件头验证探测。
-��成的 awdb 文件头验证探测。
+��成的 awdb 文件头验证探测。

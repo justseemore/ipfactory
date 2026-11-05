@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -58,15 +59,40 @@ func OpenGeoCN(cfg GeoCNConfig) (Backend, error) {
 	}
 	b := &geocnBackend{name: name, reader: reader}
 
-	if cfg.Divisions != "" {
-		div, err := loadDivisions(cfg.Divisions)
+	divPath := cfg.Divisions
+	if divPath == "" {
+		divPath = findDivisions(cfg.Path)
+	}
+	if divPath != "" {
+		div, err := loadDivisions(divPath)
 		if err != nil {
-			_ = reader.Close()
-			return nil, fmt.Errorf("ipfactory: load geocn divisions %q: %w", cfg.Divisions, err)
+			if cfg.Divisions != "" {
+				_ = reader.Close()
+				return nil, fmt.Errorf("ipfactory: load geocn divisions %q: %w", divPath, err)
+			}
+			// 自动探测失败不致命：还有内置省级表兜底。
+			div = nil
 		}
 		b.div = div
 	}
 	return b, nil
+}
+
+// findDivisions 在 mmdb 旁边找 GeoCN 的行政区划表：优先 full.txt，其次 short.txt。
+func findDivisions(mmdbPath string) string {
+	dir := filepath.Dir(mmdbPath)
+	candidates := []string{
+		filepath.Join(dir, "full.txt"),
+		filepath.Join(dir, "short.txt"),
+		filepath.Join(dir, "data", "full.txt"),
+		filepath.Join(dir, "data", "short.txt"),
+	}
+	for _, path := range candidates {
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			return path
+		}
+	}
+	return ""
 }
 
 func (b *geocnBackend) Name() string { return b.name }
@@ -114,23 +140,31 @@ func (b *geocnBackend) LookupAddr(ctx context.Context, addr netip.Addr) (*Result
 		res.Version = 6
 	}
 
-	code := toUint32(raw["division_code"])
-	if code != 0 {
-		res.Province, res.City, res.District = b.splitDivision(code)
+	// 记录里除了 division_code 还可能带 isp / country / city 等字段，
+	// 统一走列名映射；未知列会落进 Extra。
+	for key, value := range raw {
+		mapColumn(res, key, value, nil)
 	}
 
-	extra := make(map[string]any, len(raw)+2)
-	for k, v := range raw {
-		extra[k] = v
+	// division_code 比记录里的文本字段更精确，放在最后覆盖。
+	if code := toUint32(raw["division_code"]); code != 0 {
+		province, city, district := b.splitDivision(code)
+		if province != "" {
+			res.Province = province
+		}
+		if city != "" {
+			res.City = city
+		}
+		if district != "" {
+			res.District = district
+		}
 	}
-	if code != 0 {
-		extra["division_code"] = code
-	}
+
 	if network != nil {
-		extra["network"] = network.String()
-	}
-	if len(extra) > 0 {
-		res.Extra = extra
+		if res.Extra == nil {
+			res.Extra = make(map[string]any, 1)
+		}
+		res.Extra["network"] = network.String()
 	}
 	return res, nil
 }
@@ -140,16 +174,12 @@ func (b *geocnBackend) LookupAddr(ctx context.Context, addr netip.Addr) (*Result
 // 编码规则（GB/T 2260）：前两位省、中间两位市、后两位区县，全 0 表示没有下一级；
 // GeoCN 的记录有的只到省（110000），有的到区县（110108）。
 func (b *geocnBackend) splitDivision(code uint32) (province, city, district string) {
-	if len(b.div) == 0 {
-		return "", "", ""
-	}
-
 	provinceCode := code / 10000 * 10000
 	cityCode := code / 100 * 100
 
-	province = b.div[provinceCode]
+	province = b.lookupDiv(provinceCode)
 	if cityCode != provinceCode {
-		city = b.div[cityCode]
+		city = b.lookupDiv(cityCode)
 		// 直辖市的市级码一般写作「市辖区 / 县」，或与省同名；这类占位名
 		// 统一用省名兜底，保证 City 与 xdb / awdb 的「北京市」写法对齐。
 		switch city {
@@ -158,9 +188,57 @@ func (b *geocnBackend) splitDivision(code uint32) (province, city, district stri
 		}
 	}
 	if code != cityCode && code != provinceCode {
-		district = b.div[code]
+		district = b.lookupDiv(code)
 	}
 	return province, city, district
+}
+
+// lookupDiv 查行政区划名：优先用外部表，其次用内置的省级兜底表。
+func (b *geocnBackend) lookupDiv(code uint32) string {
+	if name := b.div[code]; name != "" {
+		return name
+	}
+	return builtinProvinces[code]
+}
+
+// builtinProvinces 是 34 个省级行政区划码的兜底名称。
+// 没有提供 divisions 表时，至少能保证 Province（及直辖市的 City）有值；
+// 市/区县名称仍需外部表。
+var builtinProvinces = map[uint32]string{
+	110000: "北京市",
+	120000: "天津市",
+	130000: "河北省",
+	140000: "山西省",
+	150000: "内蒙古自治区",
+	210000: "辽宁省",
+	220000: "吉林省",
+	230000: "黑龙江省",
+	310000: "上海市",
+	320000: "江苏省",
+	330000: "浙江省",
+	340000: "安徽省",
+	350000: "福建省",
+	360000: "江西省",
+	370000: "山东省",
+	410000: "河南省",
+	420000: "湖北省",
+	430000: "湖南省",
+	440000: "广东省",
+	450000: "广西壮族自治区",
+	460000: "海南省",
+	500000: "重庆市",
+	510000: "四川省",
+	520000: "贵州省",
+	530000: "云南省",
+	540000: "西藏自治区",
+	610000: "陕西省",
+	620000: "甘肃省",
+	630000: "青海省",
+	640000: "宁夏回族自治区",
+	650000: "新疆维吾尔自治区",
+	710000: "台湾省",
+	810000: "香港特别行政区",
+	820000: "澳门特别行政区",
 }
 
 // loadDivisions 读取 GeoCN 仓库的行政区划表。
