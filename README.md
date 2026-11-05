@@ -28,13 +28,16 @@ client.go    空占位（热切换层已移除，可删）
 go get github.com/justseemore/ipfactory
 ```
 
-`awdb` 还没发 tag 时，先在本地指向它：
+仓库里的 `go.mod` 不带版本号，第一次拉取时按**最新**解析：
 
 ```bash
 cd ipfactory
-go mod edit -replace github.com/justseemore/awdb=../awdb
-go mod tidy
+go mod tidy          # 自动写入 awdb / ipgeo 的最新版本（没有 tag 时用伪版本）
+go get -u ./...      # 以后想升到最新，再跑一次
 ```
+
+两个依赖都在 GitHub 上公开（`justseemore/awdb`、`justseemore/ipgeo`），不需要 `replace`。
+只有本地还没推送、想临时联调时才用 `go mod edit -replace ...=../awdb`，发版前删掉。
 
 注：`ipgeo` 的 `go.mod` 声明了 `go 1.26.0`，所以本模块最低也是 `go 1.26.0`。
 
