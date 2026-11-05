@@ -31,6 +31,10 @@ type Config struct {
 
 	// GeoCN 在 Kind 为 geocn 或 auto 时使用。
 	GeoCN GeoCNConfig
+
+	// Raw 为 true 时不做字段值归一化，保留各库的原始写法。
+	// 默认 false，即用 Normalize 统一占位符、国家名与 ISO 码。
+	Raw bool
 }
 
 // resolveKind 决定用哪个后端：显式 Kind 优先，否则按配置和文件内容推断。
@@ -73,15 +77,25 @@ func OpenBackend(cfg Config) (Backend, error) {
 		return nil, err
 	}
 
+	var backend Backend
 	switch kind {
 	case KindAWDB:
-		return OpenAWDB(cfg.AWDB)
+		backend, err = OpenAWDB(cfg.AWDB)
 	case KindXDB, "ipgeo", "ip2region":
-		return OpenXDB(cfg.XDB)
+		backend, err = OpenXDB(cfg.XDB)
 	case KindGeoCN, "mmdb":
-		return OpenGeoCN(cfg.GeoCN)
+		backend, err = OpenGeoCN(cfg.GeoCN)
+	default:
+		return nil, fmt.Errorf("ipfactory: unknown kind %q", kind)
 	}
-	return nil, fmt.Errorf("ipfactory: unknown kind %q", kind)
+	if err != nil {
+		return nil, err
+	}
+
+	if cfg.Raw {
+		return backend, nil
+	}
+	return normalizeBackend{Backend: backend}, nil
 }
 
 // OpenChain 按顺序打开多个配置并串成主备链。

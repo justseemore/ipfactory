@@ -122,7 +122,8 @@ backend, err := ipfactory.OpenChain(
 | `Backend.Lookup(ip string)` | 字符串入口，内部用 `context.Background()` |
 | `Backend.LookupAddr(ctx, netip.Addr)` | 带 context 的查询入口 |
 | `Backend.Name()` / `Backend.Close()` | 后端名 / 释放资源（重复调用安全） |
-| `Config` | `Kind` + `AWDB` + `XDB` + `GeoCN` |
+| `Normalize(*Result)` | 手动归一化字段值（默认已自动应用） |
+| `Config` | `Kind` + `AWDB` + `XDB` + `GeoCN` + `Raw` |
 | `AWDBConfig` | `Path` / `Name` / `Preload` / `Aliases` |
 | `XDBConfig` | `V4Path` / `V6Path` / `Name` / `Policy` / `LRU` / `Preload` / `Layout` |
 | `GeoCNConfig` | `Path` / `Name` / `Divisions` / `Preload` |
@@ -148,6 +149,27 @@ AWDBConfig{
 	Aliases: map[string]string{"continent_cn": "continent", "area_code": "district"},
 }
 ```
+
+## 字段归一化
+
+不同库对同一概念的写法不一致，`OpenBackend` 默认会包一层 `Normalize`：
+
+| 规则 | 例子 |
+| --- | --- |
+| 去首尾空白（含全角空格） | `"　北京市 "` → `北京市` |
+| 占位符归空 | `0` / `-` / `null` / `unknown` / `未知` → `""` |
+| 国家名归一 | `China` / `CN` / `CHN` / `PRC` / `中华人民共和国` → `中国` |
+| ISO 码大写并补全 | `cn` → `CN`；`Country=中国` 且无码时补 `CN` |
+
+规则幂等，只作用于标量字段，`Extra` 保持原样。不想要归一化时：
+
+```go
+ipfactory.Config{Kind: "xdb", Raw: true, XDB: ...}
+```
+
+也可以对已有结果手动调用 `ipfactory.Normalize(res)`。注意它**不会**把“广东省”改成“广东”
+——行政区后缀属于数据本身的粒度差异，不同源里“市辖区/县”这类中间层已经被 GeoCN 适配器清空，
+但省/市/区的后缀保留，避免丢掉“自治区”“特别行政区”这类信息。
 
 ## 错误契约
 

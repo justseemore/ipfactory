@@ -340,3 +340,64 @@ func TestOpenGeoCNPreloadInvalid(t *testing.T) {
 		t.Error("invalid mmdb accepted")
 	}
 }
+
+func TestNormalize(t *testing.T) {
+	res := &Result{
+		Country:     "China",
+		Province:    "\u3000北京市 ",
+		City:        "0",
+		District:    "-",
+		ISP:         "电信",
+		NetworkType: "unknown",
+		ISOCode:     "cn",
+	}
+	Normalize(res)
+
+	if res.Country != "中国" {
+		t.Errorf("Country = %q, want 中国", res.Country)
+	}
+	if res.Province != "北京市" {
+		t.Errorf("Province = %q, want 北京市", res.Province)
+	}
+	if res.City != "" || res.District != "" || res.NetworkType != "" {
+		t.Errorf("占位符未清空: city=%q district=%q net=%q", res.City, res.District, res.NetworkType)
+	}
+	if res.ISP != "电信" {
+		t.Errorf("ISP = %q", res.ISP)
+	}
+	if res.ISOCode != "CN" {
+		t.Errorf("ISOCode = %q, want CN", res.ISOCode)
+	}
+
+	// 幂等
+	Normalize(res)
+	if res.Country != "中国" || res.ISOCode != "CN" {
+		t.Errorf("Normalize 不幂等: %+v", res)
+	}
+
+	// 只有国家名时补 ISO 码
+	only := &Result{Country: "中华人民共和国"}
+	Normalize(only)
+	if only.Country != "中国" || only.ISOCode != "CN" {
+		t.Errorf("only country: %+v", only)
+	}
+
+	// nil 安全
+	Normalize(nil)
+}
+
+func TestNormalizeBackend(t *testing.T) {
+	raw := &fakeBackend{name: "raw", res: &Result{Country: "CN", Province: "北京市", City: "0"}}
+	var backend Backend = normalizeBackend{Backend: raw}
+
+	res, err := backend.Lookup("1.2.3.4")
+	if err != nil {
+		t.Fatalf("Lookup: %v", err)
+	}
+	if res.Country != "中国" || res.City != "" {
+		t.Errorf("未归一化: %+v", res)
+	}
+	if res.Backend != "raw" || backend.Name() != "raw" {
+		t.Errorf("Backend/Name 被破坏: %q %q", res.Backend, backend.Name())
+	}
+}
