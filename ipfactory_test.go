@@ -261,3 +261,82 @@ func TestChainLookup(t *testing.T) {
 		t.Errorf("Lookup(invalid) error = %v, want ErrInvalidIP", err)
 	}
 }
+
+func TestSplitDivisionLine(t *testing.T) {
+	code, name, ok := splitDivisionLine("110000\t北京市")
+	if !ok || code != 110000 || name != "北京市" {
+		t.Errorf("tab 格式: %d %q %v", code, name, ok)
+	}
+
+	code, name, ok = splitDivisionLine("110108  海淀区")
+	if !ok || code != 110108 || name != "海淀区" {
+		t.Errorf("双空格格式: %d %q %v", code, name, ok)
+	}
+
+	if _, _, ok := splitDivisionLine("garbage"); ok {
+		t.Error("无分隔符的行不应被接受")
+	}
+}
+
+func TestGeoCNDivisionSplit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "full.txt")
+	content := "110000\t北京市\n110100\t市辖区\n110108\t海淀区\n310000\t上海市\n310115\t浦东新区\n440000\t广东省\n440300\t深圳市\n440305\t南山区\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	div, err := loadDivisions(path)
+	if err != nil {
+		t.Fatalf("loadDivisions: %v", err)
+	}
+	b := &geocnBackend{div: div}
+
+	cases := []struct {
+		code                     uint32
+		province, city, district string
+	}{
+		{110108, "北京市", "", "海淀区"},
+		{110100, "北京市", "", ""},
+		{310115, "上海市", "", "浦东新区"},
+		{440305, "广东省", "深圳市", "南山区"},
+		{440300, "广东省", "深圳市", ""},
+		{440000, "广东省", "", ""},
+	}
+	for _, tc := range cases {
+		p, c, d := b.splitDivision(tc.code)
+		if p != tc.province || c != tc.city || d != tc.district {
+			t.Errorf("splitDivision(%d) = %q/%q/%q, want %q/%q/%q",
+				tc.code, p, c, d, tc.province, tc.city, tc.district)
+		}
+	}
+
+	// 没有行政区划表时只留空，不能 panic
+	empty := &geocnBackend{}
+	if p, c, d := empty.splitDivision(110108); p != "" || c != "" || d != "" {
+		t.Errorf("empty table: %q/%q/%q", p, c, d)
+	}
+}
+
+func TestOpenGeoCNErrors(t *testing.T) {
+	if _, err := OpenGeoCN(GeoCNConfig{}); err == nil {
+		t.Error("empty GeoCNConfig accepted")
+	}
+	if _, err := OpenGeoCN(GeoCNConfig{Path: filepath.Join(t.TempDir(), "none.mmdb")}); err == nil {
+		t.Error("missing mmdb accepted")
+	}
+}
+
+func TestOpenGeoCNPreloadInvalid(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bad.mmdb")
+	if err := os.WriteFile(path, []byte("not an mmdb"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// 两条路径都要报错：mmap 与非 mmap 的校验必须一致
+	if _, err := OpenGeoCN(GeoCNConfig{Path: path, Preload: true}); err == nil {
+		t.Error("invalid mmdb accepted with Preload")
+	}
+	if _, err := OpenGeoCN(GeoCNConfig{Path: path}); err == nil {
+		t.Error("invalid mmdb accepted")
+	}
+}

@@ -13,12 +13,14 @@ const (
 	KindAWDB = "awdb"
 	// KindXDB 强制使用 ip2region xdb 后端。
 	KindXDB = "xdb"
+	// KindGeoCN 强制使用 ljxi/GeoCN 的 mmdb 后端。
+	KindGeoCN = "geocn"
 )
 
 // Config 描述一个后端来源。
 //
 type Config struct {
-	// Kind 是 "awdb" / "xdb" / "auto"（留空等价于 auto）。
+	// Kind 是 "awdb" / "xdb" / "geocn" / "auto"（留空等价于 auto）。
 	Kind string
 
 	// AWDB 在 Kind 为 awdb 或 auto 时使用。
@@ -26,13 +28,22 @@ type Config struct {
 
 	// XDB 在 Kind 为 xdb 或 auto 时使用。
 	XDB XDBConfig
+
+	// GeoCN 在 Kind 为 geocn 或 auto 时使用。
+	GeoCN GeoCNConfig
 }
 
-// resolveKind 决定用哪个后端：显式 Kind 优先，否则按文件内容探测。
+// resolveKind 决定用哪个后端：显式 Kind 优先，否则按配置和文件内容推断。
 func (c Config) resolveKind() (string, error) {
 	kind := strings.ToLower(strings.TrimSpace(c.Kind))
 	if kind != "" && kind != KindAuto {
 		return kind, nil
+	}
+
+	// 填了 GeoCN.Path 就说明要用它。mmdb 与 awdb / xdb 的内容特征不同，但
+	// GeoCN 与普通 GeoLite2 无法从内容区分，所以不做探测。
+	if c.GeoCN.Path != "" {
+		return KindGeoCN, nil
 	}
 
 	hasXDB := c.XDB.V4Path != "" || c.XDB.V6Path != ""
@@ -65,8 +76,10 @@ func OpenBackend(cfg Config) (Backend, error) {
 	switch kind {
 	case KindAWDB:
 		return OpenAWDB(cfg.AWDB)
-	case KindXDB, "ipgeo":
+	case KindXDB, "ipgeo", "ip2region":
 		return OpenXDB(cfg.XDB)
+	case KindGeoCN, "mmdb":
+		return OpenGeoCN(cfg.GeoCN)
 	}
 	return nil, fmt.Errorf("ipfactory: unknown kind %q", kind)
 }

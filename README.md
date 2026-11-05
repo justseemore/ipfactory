@@ -1,11 +1,12 @@
 # ipfactory
 
-把两个离线 IP 库收敛成一套接口，按配置或文件内容**动态选择**用哪个，也可以**同时用**（主备链）。
+把三个离线 IP 库收敛成一套接口，按配置或文件内容**动态选择**用哪个，也可以**同时用**（主备链）。
 
 | 后端 | 提供方 | 文件 |
 | --- | --- | --- |
 | `awdb` | [github.com/justseemore/awdb](https://github.com/justseemore/awdb) | `.awdb`（JSON 头 + 检索树） |
 | `xdb` | [github.com/justseemore/ipgeo](https://github.com/justseemore/ipgeo) | ip2region v2 `.xdb`（v4 / v6 各一个） |
+| `geocn` | [ljxi/GeoCN](https://github.com/ljxi/GeoCN) | `GeoCN.mmdb`（MaxMind mmdb，只含中国大陆）+ `data/full.txt` 行政区划表 |
 
 **不含热切换**（无 Reload / Watch / Swap / 引用计数）。需要运行期换库时，自己持有 `Backend` 做原子替换，或者直接用 `ipgeo` 自带的 `Provider`。
 
@@ -15,6 +16,7 @@
 backend.go   Backend 接口、Result、列名映射、统一错误
 awdb.go      AWDB 适配器
 xdb.go       ip2region xdb 适配器
+geocn.go     GeoCN（mmdb）适配器 + 行政区划码解析
 chain.go     主备链（顺序回落）
 factory.go   工厂：Config / OpenBackend / OpenChain
 detect.go    按文件头判断格式
@@ -86,7 +88,28 @@ backend, err := ipfactory.OpenChain(
 ```go
 ipfactory.Config{Kind: "awdb"} // 不看文件头，直接按 AWDB 打开
 ipfactory.Config{Kind: "xdb"}  // 直接按 ip2region xdb 打开
+ipfactory.Config{Kind: "geocn"} // 直接按 GeoCN mmdb 打开
 ```
+
+### 4. 叠加 GeoCN（中国大陆精度到区）
+
+GeoCN 只收录中国大陆段，境外地址一律 `ErrNotFound`，所以适合放在链首：
+
+```go
+backend, err := ipfactory.OpenChain(
+	ipfactory.Config{Kind: "geocn", GeoCN: ipfactory.GeoCNConfig{
+		Path:      "data/GeoCN.mmdb",
+		Divisions: "data/full.txt",   // 把 division_code 解成省/市/区县
+	}},
+	ipfactory.Config{XDB: ipfactory.XDBConfig{
+		V4Path: "data/ip2region_v4.xdb",
+		V6Path: "data/ip2region_v6.xdb",
+	}},
+)
+```
+
+`GeoCN.mmdb` 从 [Releases](https://github.com/ljxi/GeoCN/releases/latest/download/GeoCN.mmdb) 下载；
+`data/full.txt`（全名）或 `data/short.txt`（简称）从仓库拿，两种分隔符都认。
 
 ## API
 
@@ -99,13 +122,15 @@ ipfactory.Config{Kind: "xdb"}  // 直接按 ip2region xdb 打开
 | `Backend.Lookup(ip string)` | 字符串入口，内部用 `context.Background()` |
 | `Backend.LookupAddr(ctx, netip.Addr)` | 带 context 的查询入口 |
 | `Backend.Name()` / `Backend.Close()` | 后端名 / 释放资源（重复调用安全） |
-| `Config` | `Kind` + `AWDB` + `XDB` |
+| `Config` | `Kind` + `AWDB` + `XDB` + `GeoCN` |
 | `AWDBConfig` | `Path` / `Name` / `Preload` / `Aliases` |
-| `XDBConfig` | `V4Path` / `V6Path` / `Name` / `Policy` / `LRU` / `Layout` |
+| `XDBConfig` | `V4Path` / `V6Path` / `Name` / `Policy` / `LRU` / `Preload` / `Layout` |
+| `GeoCNConfig` | `Path` / `Name` / `Divisions` / `Preload` |
+| `OpenGeoCN(GeoCNConfig) (Backend, error)` | 打开 GeoCN mmdb（把 `division_code` 解成省/市/区县） |
 
 ## 结果映射
 
-`Result` 把两家共有的字段提升成结构体字段：
+`Result` 把三家共有的字段提升成结构体字段：
 
 ```
 IP Version Continent Country Province City District ISP NetworkType ISOCode IsPrivate Backend Extra
@@ -113,6 +138,7 @@ IP Version Continent Country Province City District ISP NetworkType ISOCode IsPr
 
 - **xdb**：`ipgeo.Info` 直接映射；`Raw`（原始 region 串）放进 `Extra["raw"]`。
 - **awdb**：按列名映射。内置常见别名（`country` / `国家` / `country_name`、`iso_code` / `country_code` / `国家代码`、`运营商` 等），归一化规则是“小写 + 空格/`-`/`.` 转 `_`”。
+- **geocn**：`Country` 固定为 `中国`、`ISOCode` 固定为 `CN`（库本身只收大陆段）；`division_code` 按 GB/T 2260 拆成省/市/区县（需要 `Divisions` 表，否则只把码放进 `Extra`）；原始记录和命中网段在 `Extra` 里。
 - 不认识的列 → `Extra[原列名]`，嵌套列（多语言区划表）保留 `[]map[string]any` 结构，不丢信息。
 - 列名对不上时用 `AWDBConfig.Aliases` 覆盖：
 
@@ -148,7 +174,7 @@ go vet ./... && go test -race ./...
 
 测试不依赖真实库文件：`fakeBackend` 覆盖链式回落、硬错误、关闭、ctx 取消；`TestMapColumn` / `TestResultGet` 覆盖映射；`TestDetectKind` 用合成的 awdb 文件头验证探测。
 ull` 三者行为完全一致。所以 `XDBConfig.Policy` 只是原样透传（上游恢复后自动生效）；真正有用的缓存是 `XDBConfig.LRU`：按 IP 的结果缓存，256 分片、FIFO 淘汰（命中不提升）。
-6. **`Preload` 两个后端都支持**：`XDBConfig.Preload` 透传给 `ipgeo.WithPreload`（xdb 整文件读进堆，v4/v6 各自计算），`AWDBConfig.Preload` 透传给 `awdb.WithPreload`（`os.ReadFile` + `OpenBytes`）。两者都让 RSS ≈ 文件大小并消除运行期缺页，默认都关闭（mmap）。本地联调借助仓库根的 `go.work` 指向本地 `awdb` / `ipgeo`；推到远端前要先发这两条改动，否则 `@latest` 拉不到 `WithPreload`。
+6. **`Preload` 三个后端都支持**：`XDBConfig.Preload` → `ipgeo.WithPreload`（xdb 整文件读进堆，v4/v6 各自计算），`AWDBConfig.Preload` → `awdb.WithPreload`（`os.ReadFile` + `OpenBytes`），`GeoCNConfig.Preload` → `maxminddb.FromBytes`。三者都让 RSS ≈ 文件大小并消除运行期缺页，默认都关闭（mmap）。本地联调借助仓库根的 `go.work` 指向本地 `awdb` / `ipgeo`；推到远端前要先发这两条改动，否则 `@latest` 拉不到 `WithPreload`。
 
 ## 测试
 
