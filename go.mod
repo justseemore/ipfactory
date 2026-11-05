@@ -3,8 +3,8 @@ module github.com/justseemore/ipfactory
 go 1.26.0
 
 require (
-	github.com/justseemore/awdb v0.0.0-20261105081112-0be48c37344a
-	github.com/justseemore/ipgeo v0.0.0-20261103104410-e3ad7e8a8497
+	github.com/justseemore/awdb v0.0.0-20261105093557-8880e0091f24
+	github.com/justseemore/ipgeo v0.0.0-20261105092903-40d37fec27aa
 )
 
 require (

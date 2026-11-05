@@ -1,7 +1,7 @@
-github.com/justseemore/awdb v0.0.0-20261105081112-0be48c37344a h1:uQ+RAn96Tn9tAi11JC/XgKRNlP9026BPDC4IB7MSYKc=
-github.com/justseemore/awdb v0.0.0-20261105081112-0be48c37344a/go.mod h1:vzkMBxU1tzM4UxzEyc6ejRl6WLip0xQcrAgYzrL6zek=
-github.com/justseemore/ipgeo v0.0.0-20261103104410-e3ad7e8a8497 h1:mxjc0ZEmt/1jBnql+uJKH3mlgDKQgRRGcIBJyPNKwGs=
-github.com/justseemore/ipgeo v0.0.0-20261103104410-e3ad7e8a8497/go.mod h1:vsTnXONor3lrU9YcvqHuDSe8Cpl1o4a1xGaGmDSd3tA=
+github.com/justseemore/awdb v0.0.0-20261105093557-8880e0091f24 h1:trYI6GrT+gNHo0SaYywMos2FLQ7lOSbygK4jJ8uxHFI=
+github.com/justseemore/awdb v0.0.0-20261105093557-8880e0091f24/go.mod h1:vzkMBxU1tzM4UxzEyc6ejRl6WLip0xQcrAgYzrL6zek=
+github.com/justseemore/ipgeo v0.0.0-20261105092903-40d37fec27aa h1:Bf0vBmL2pHaGxCx+ITDU5VzL7iOIzjRvnhNJRUgYUbM=
+github.com/justseemore/ipgeo v0.0.0-20261105092903-40d37fec27aa/go.mod h1:vsTnXONor3lrU9YcvqHuDSe8Cpl1o4a1xGaGmDSd3tA=
 github.com/lionsoul2014/ip2region/binding/golang v0.0.0-20261028042204-6a276cc7c4f9 h1:X3M/RlLEQd7XAR2Y/EnKpObVwdI1HWs+a+pT/2pQwrM=
 github.com/lionsoul2014/ip2region/binding/golang v0.0.0-20261028042204-6a276cc7c4f9/go.mod h1:sj5LMpsqB4IWdwIrcmmBJM6m+rW/uOQLSGUPhKkqdh8=
 golang.org/x/sys v0.49.0 h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=

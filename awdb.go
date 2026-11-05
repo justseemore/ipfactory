@@ -17,6 +17,10 @@ type AWDBConfig struct {
 	// Name 是后端名，默认 "awdb"。
 	Name string
 
+	// Preload 为 true 时让 awdb 把整文件读进堆内存（os.ReadFile + OpenBytes），
+	// 而不是 mmap：无运行期缺页、不占句柄，RSS ≈ 文件大小。
+	Preload bool
+
 	// Aliases 覆盖或补充列名映射，键会被归一化（小写、- / 空格 / . 转 _）。
 	// 例如 {"continent_cn": "continent"}。
 	Aliases map[string]string
@@ -33,7 +37,7 @@ func OpenAWDB(cfg AWDBConfig) (Backend, error) {
 	if cfg.Path == "" {
 		return nil, errors.New("ipfactory: AWDBConfig.Path is empty")
 	}
-	reader, err := awdb.Open(cfg.Path)
+	reader, err := awdb.Open(cfg.Path, awdb.WithPreload(cfg.Preload))
 	if err != nil {
 		return nil, fmt.Errorf("ipfactory: open awdb %q: %w", cfg.Path, err)
 	}
